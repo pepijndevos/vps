@@ -20,11 +20,6 @@
         aliases: []
         proxy_pass: "http://localhost:5984"  # CouchDB default port
     
-    # Nginx configuration
-    nginx_worker_processes: auto
-    nginx_worker_connections: 1024
-    nginx_keepalive_timeout: 65
-    
     # CouchDB configuration
     couchdb_admin_user: admin
     couchdb_admin_password: "{{ vault_couchdb_password | default('changeme123!') }}"
@@ -72,13 +67,6 @@
         group: "{{ nginx_user }}"
         mode: '0644'
       loop: "{{ virtual_hosts }}"
-
-    - name: Configure main nginx.conf
-      template:
-        src: nginx.conf.j2
-        dest: /etc/nginx/nginx.conf
-        backup: yes
-      notify: restart nginx
 
     - name: Remove default nginx site
       file:
