@@ -19,11 +19,17 @@
         document_root: /var/www/api.nyancad.com
         aliases: []
         proxy_pass: "http://localhost:5984"  # CouchDB default port
-
+    
     # Nginx configuration
     nginx_worker_processes: auto
     nginx_worker_connections: 1024
     nginx_keepalive_timeout: 65
+    
+    # CouchDB configuration
+    couchdb_admin_user: admin
+    couchdb_admin_password: "{{ vault_couchdb_password | default('changeme123!') }}"
+    couchdb_bind_address: "127.0.0.1"
+    couchdb_port: 5984
     
   tasks:
     - name: Update package cache
@@ -39,6 +45,7 @@
           - software-properties-common
           - python3-certbot-nginx
           - ufw
+          - debconf-utils
         state: present
 
     - name: Create web directories for virtual hosts
@@ -112,6 +119,56 @@
         state: enabled
         policy: deny
 
+    # CouchDB Installation and Configuration
+    - name: Add CouchDB repository key
+      apt_key:
+        url: https://couchdb.apache.org/repo/keys.asc
+        state: present
+
+    - name: Add CouchDB repository
+      apt_repository:
+        repo: "deb https://apache.jfrog.io/artifactory/couchdb-deb/ {{ ansible_distribution_release }} main"
+        state: present
+
+    - name: Update package cache after adding CouchDB repo
+      apt:
+        update_cache: yes
+
+    - name: Pre-configure CouchDB installation (debconf)
+      debconf:
+        name: couchdb
+        question: "{{ item.question }}"
+        value: "{{ item.value }}"
+        vtype: "{{ item.vtype }}"
+      loop:
+        - { question: "couchdb/mode", value: "standalone", vtype: "select" }
+        - { question: "couchdb/bindaddress", value: "{{ couchdb_bind_address }}", vtype: "string" }
+        - { question: "couchdb/adminpass", value: "{{ couchdb_admin_password }}", vtype: "password" }
+        - { question: "couchdb/adminpass_again", value: "{{ couchdb_admin_password }}", vtype: "password" }
+
+    - name: Install CouchDB with pre-configured settings
+      apt:
+        name: couchdb
+        state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Configure CouchDB CORS and per-user settings
+      template:
+        src: couchdb-local.ini.j2
+        dest: /opt/couchdb/etc/local.d/local.ini
+        owner: couchdb
+        group: couchdb
+        mode: '0644'
+        backup: yes
+      notify: restart couchdb
+
+    - name: Start and enable CouchDB
+      systemd:
+        name: couchdb
+        state: started
+        enabled: yes
+
     - name: Obtain SSL certificates with certbot
       command: >
         certbot --nginx 
@@ -141,4 +198,9 @@
     - name: restart nginx
       systemd:
         name: nginx
+        state: restarted
+
+    - name: restart couchdb
+      systemd:
+        name: couchdb
         state: restarted
