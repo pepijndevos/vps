@@ -1,0 +1,144 @@
+---
+- name: Setup Nginx with Certbot and Virtual Hosts
+  hosts: webservers
+  become: yes
+  vars:
+    # Configuration variables
+    nginx_user: www-data
+    certbot_email: me@pepijndevos.nl
+    
+    # Define your virtual hosts here
+    virtual_hosts:
+      - domain: pkg.sanctuary-systems.com
+        document_root: /var/www/pkg.sanctuary-systems.com
+        aliases: []
+      - domain: nyancad.com
+        document_root: /var/www/nyancad.com
+        aliases: ["www.nyancad.com"]
+      - domain: api.nyancad.com
+        document_root: /var/www/api.nyancad.com
+        aliases: []
+        proxy_pass: "http://localhost:5984"  # CouchDB default port
+
+    # Nginx configuration
+    nginx_worker_processes: auto
+    nginx_worker_connections: 1024
+    nginx_keepalive_timeout: 65
+    
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      package:
+        name:
+          - nginx
+          - software-properties-common
+          - python3-certbot-nginx
+          - ufw
+        state: present
+
+    - name: Create web directories for virtual hosts
+      file:
+        path: "{{ item.document_root }}"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+        mode: '0755'
+      loop: "{{ virtual_hosts }}"
+
+    - name: Create index.html files for each virtual host
+      template:
+        src: index.html.j2
+        dest: "{{ item.document_root }}/index.html"
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+        mode: '0644'
+      loop: "{{ virtual_hosts }}"
+
+    - name: Configure main nginx.conf
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+        backup: yes
+      notify: restart nginx
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+
+    - name: Create nginx virtual host configurations (HTTP only initially)
+      template:
+        src: vhost.conf.j2
+        dest: "/etc/nginx/sites-available/{{ item.domain }}"
+      loop: "{{ virtual_hosts }}"
+      notify: restart nginx
+
+    - name: Enable virtual host sites
+      file:
+        src: "/etc/nginx/sites-available/{{ item.domain }}"
+        dest: "/etc/nginx/sites-enabled/{{ item.domain }}"
+        state: link
+      loop: "{{ virtual_hosts }}"
+      notify: restart nginx
+
+    - name: Test nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+
+    - name: Start and enable nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Configure UFW firewall
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Obtain SSL certificates with certbot
+      command: >
+        certbot --nginx 
+        --email {{ certbot_email }} 
+        --agree-tos 
+        --non-interactive 
+        --domains {{ item.domain }}{% if item.aliases %},{{ item.aliases | join(',') }}{% endif %}
+      loop: "{{ virtual_hosts }}"
+      register: certbot_result
+      failed_when: certbot_result.rc != 0 and "Certificate not yet due for renewal" not in certbot_result.stdout
+      changed_when: "'Congratulations!' in certbot_result.stdout"
+
+    - name: Setup certbot auto-renewal cron job
+      cron:
+        name: "Certbot auto renewal"
+        minute: "0"
+        hour: "12"
+        job: "/usr/bin/certbot renew --quiet --post-hook 'systemctl reload nginx'"
+        user: root
+
+    - name: Ensure nginx is restarted after SSL setup
+      systemd:
+        name: nginx
+        state: restarted
+
+  handlers:
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
