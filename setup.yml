@@ -52,6 +52,7 @@
           - python3-certbot-nginx
           - ufw
           - debconf-utils
+          - unattended-upgrades
         state: present
 
     - name: Create web directories for virtual hosts
@@ -126,14 +127,21 @@
         policy: deny
 
     # CouchDB Installation and Configuration
+    - name: Create keyring directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
     - name: Add CouchDB repository key
-      apt_key:
+      get_url:
         url: https://couchdb.apache.org/repo/keys.asc
-        state: present
+        dest: /etc/apt/keyrings/couchdb-archive-keyring.asc
+        mode: '0644'
 
     - name: Add CouchDB repository
       apt_repository:
-        repo: "deb https://apache.jfrog.io/artifactory/couchdb-deb/ {{ ansible_distribution_release }} main"
+        repo: "deb [signed-by=/etc/apt/keyrings/couchdb-archive-keyring.asc] https://apache.jfrog.io/artifactory/couchdb-deb/ {{ ansible_distribution_release }} main"
         state: present
 
     - name: Update package cache after adding CouchDB repo
@@ -240,6 +248,13 @@
     - name: Start and enable GitHub Actions runner service
       systemd:
         name: actions.runner.sanctuary-systems-com-llm-addons.{{ github_runner_name }}.service
+        state: started
+        enabled: yes
+
+    # Enable automatic security updates
+    - name: Start and enable unattended-upgrades
+      systemd:
+        name: unattended-upgrades
         state: started
         enabled: yes
 
