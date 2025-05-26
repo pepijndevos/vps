@@ -8,7 +8,7 @@ Ansible playbook that sets up software on my VPS.
 
 3. **Run playbook:**
 ```bash
-ansible-playbook -i hosts.ini nginx-setup.yml --ask-vault-pass
+ansible-playbook -i hosts.ini setup.yml --ask-vault-pass
 ```
 
 ## Vault management
