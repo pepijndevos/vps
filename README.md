@@ -4,16 +4,6 @@ Ansible playbook that sets up software on my VPS.
 
 ## Setup
 
-1. **Create vault for CouchDB password:**
-```bash
-ansible-vault create group_vars/all/vault.yml
-```
-
-Add your password:
-```yaml
-vault_couchdb_password: "your_secure_password_here"
-```
-
 2. **Update inventory:** Edit `hosts.ini` with your server details
 
 3. **Run playbook:**
