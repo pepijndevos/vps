@@ -7,11 +7,15 @@
     nginx_user: www-data
     certbot_email: me@pepijndevos.nl
     
+    # SSH public key for deploy user (replace with your actual public key)
+    deploy_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKjOW+/NI7aaK54U50U22KVi9RXYMJ3Rv+vSyxBSzP+h website-deploy"
+    
     # Define your virtual hosts here
     virtual_hosts:
       - domain: pkg.sanctuary-systems.com
         document_root: /var/www/pkg.sanctuary-systems.com
         aliases: []
+        autoindex: true
       - domain: nyancad.com
         document_root: /var/www/nyancad.com
         aliases: ["www.nyancad.com"]
@@ -58,7 +62,7 @@
         state: directory
         owner: "{{ nginx_user }}"
         group: "{{ nginx_user }}"
-        mode: '0755'
+        mode: '0775'
       loop: "{{ virtual_hosts }}"
 
     - name: Create index.html files for each virtual host
@@ -284,6 +288,30 @@
         name: actions.runner.sanctuary-systems-com-llm-addons.{{ github_runner_name }}.service
         state: started
         enabled: yes
+
+    # Deploy User Setup for Website Uploads
+    - name: Create deploy user
+      user:
+        name: deploy
+        shell: /bin/bash
+        home: /home/deploy
+        create_home: yes
+        groups: "{{ nginx_user }}"
+        append: yes
+
+    - name: Create .ssh directory for deploy user
+      file:
+        path: /home/deploy/.ssh
+        state: directory
+        owner: deploy
+        group: deploy
+        mode: '0700'
+
+    - name: Add SSH public key for deploy user
+      authorized_key:
+        user: deploy
+        key: "{{ deploy_ssh_public_key }}"
+        state: present
 
     # Enable automatic security updates
     - name: Start and enable unattended-upgrades
