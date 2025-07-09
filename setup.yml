@@ -65,15 +65,6 @@
         mode: '0775'
       loop: "{{ virtual_hosts }}"
 
-    - name: Create index.html files for each virtual host
-      template:
-        src: index.html.j2
-        dest: "{{ item.document_root }}/index.html"
-        owner: "{{ nginx_user }}"
-        group: "{{ nginx_user }}"
-        mode: '0644'
-      loop: "{{ virtual_hosts }}"
-
     - name: Remove default nginx site
       file:
         path: /etc/nginx/sites-enabled/default
