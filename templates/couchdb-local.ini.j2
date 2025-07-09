@@ -1,16 +1,18 @@
 # CouchDB local configuration overrides
 # Basic setup (standalone, bind address, admin user) is handled by debconf
 
-[httpd]
+[chttpd]
 enable_cors = true
 
 [cors]
-origins = https://nyancad.com, https://www.nyancad.com, http://localhost:3000, http://localhost:8080
+origins = https://nyancad.com, https://www.nyancad.com, http://localhost:8080
 credentials = true
 methods = GET, PUT, POST, HEAD, DELETE
 headers = accept, authorization, content-type, origin, referer, x-csrf-token
 
 [couch_peruser]
 enable = true
-database_prefix = userdb-
 delete_dbs = true
+
+[chttpd_auth]
+cookie_domain = nyancad.com
