@@ -1,0 +1,21 @@
+[Unit]
+Description=NyanCAD Server
+After=network.target
+Requires=nyancad-server.socket
+
+[Service]
+User={{ nyancad_user }}
+Group={{ nyancad_user }}
+WorkingDirectory={{ nyancad_app_dir }}
+Environment="COUCHDB_URL=http://127.0.0.1:{{ couchdb_port }}"
+Environment="COUCHDB_ADMIN_USER={{ couchdb_admin_user }}"
+Environment="COUCHDB_ADMIN_PASS={{ couchdb_admin_password }}"
+ExecStart={{ nyancad_app_dir }}/venv/bin/gunicorn \
+    --workers 3 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    "nyancad_server.server:create_wasm_app()"
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

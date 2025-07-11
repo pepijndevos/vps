@@ -17,13 +17,17 @@
         aliases: []
         autoindex: true
       - domain: nyancad.com
-        document_root: /var/www/nyancad.com
         aliases: ["www.nyancad.com"]
+        proxy_pass: "http://unix:/run/nyancad-server.sock"
       - domain: api.nyancad.com
-        document_root: /var/www/api.nyancad.com
-        aliases: []
         proxy_pass: "http://localhost:5984"  # CouchDB default port
+        aliases: []
     
+    # NyanCAD Server configuration
+    nyancad_app_dir: /opt/nyancad-server
+    nyancad_user: nyancad
+    nyancad_socket_path: /run/nyancad-server.sock
+
     # CouchDB configuration
     couchdb_admin_user: admin
     couchdb_admin_password: "{{ vault_couchdb_password | default('changeme123!') }}"
@@ -64,6 +68,7 @@
         group: "{{ nginx_user }}"
         mode: '0775'
       loop: "{{ virtual_hosts }}"
+      when: item.document_root is defined
 
     - name: Remove default nginx site
       file:
@@ -280,6 +285,61 @@
         state: started
         enabled: yes
 
+    # NyanCAD Server Setup
+    - name: Create nyancad user
+      user:
+        name: "{{ nyancad_user }}"
+        system: yes
+        shell: /bin/bash
+        home: "{{ nyancad_app_dir }}"
+        create_home: yes
+
+    - name: Create application directory
+      file:
+        path: "{{ nyancad_app_dir }}"
+        state: directory
+        owner: "{{ nyancad_user }}"
+        group: "{{ nyancad_user }}"
+        mode: '0755'
+
+    - name: Install python3-venv
+      apt:
+        name: python3-venv
+        state: present
+
+    - name: Create Python virtual environment
+      command: python3 -m venv venv
+      args:
+        chdir: "{{ nyancad_app_dir }}"
+        creates: "{{ nyancad_app_dir }}/venv"
+      become_user: "{{ nyancad_user }}"
+
+    - name: Install packages in virtual environment
+      pip:
+        name:
+          - nyancad-server
+          - gunicorn
+          - uvicorn[standard]
+        virtualenv: "{{ nyancad_app_dir }}/venv"
+
+    - name: Create systemd socket file for NyanCAD Server
+      template:
+        src: nyancad-server.socket.j2
+        dest: /etc/systemd/system/nyancad-server.socket
+
+    - name: Create systemd service file for NyanCAD Server
+      template:
+        src: nyancad-server.service.j2
+        dest: /etc/systemd/system/nyancad-server.service
+      notify: restart nyancad-server
+
+    - name: Start and enable NyanCAD Server socket
+      systemd:
+        name: nyancad-server.socket
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
     # Deploy User Setup for Website Uploads
     - name: Create deploy user
       user:
@@ -345,4 +405,9 @@
     - name: restart couchdb
       systemd:
         name: couchdb
+        state: restarted
+
+    - name: restart nyancad-server
+      systemd:
+        name: nyancad-server
         state: restarted

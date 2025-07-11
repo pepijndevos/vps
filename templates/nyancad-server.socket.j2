@@ -1,0 +1,11 @@
+[Unit]
+Description=NyanCAD Server Socket
+
+[Socket]
+ListenStream={{ nyancad_socket_path }}
+SocketUser={{ nginx_user }}
+SocketGroup={{ nginx_user }}
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target
