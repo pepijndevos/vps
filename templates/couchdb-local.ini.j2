@@ -3,12 +3,13 @@
 
 [chttpd]
 enable_cors = true
+authentication_handlers = {chttpd_auth, cookie_authentication_handler}, {chttpd_auth, jwt_authentication_handler}, {chttpd_auth, default_authentication_handler}
 
 [cors]
-origins = https://nyancad.com, https://www.nyancad.com, http://localhost:8080
+origins = https://nyancad.com, https://www.nyancad.com, http://localhost:8080,http://dev.nyancad.com:8080
 credentials = true
 methods = GET, PUT, POST, HEAD, DELETE
-headers = accept, authorization, content-type, origin, referer, x-csrf-token
+headers = accept, authorization, content-type, origin, referer
 
 [couch_peruser]
 enable = true
@@ -16,3 +17,6 @@ delete_dbs = true
 
 [chttpd_auth]
 cookie_domain = nyancad.com
+
+[jwt_keys]
+hmac:_default = {{ jwt_hmac_key | b64encode }}

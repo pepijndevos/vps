@@ -10,11 +10,14 @@ WorkingDirectory={{ nyancad_app_dir }}
 Environment="COUCHDB_URL=http://127.0.0.1:{{ couchdb_port }}"
 Environment="COUCHDB_ADMIN_USER={{ couchdb_admin_user }}"
 Environment="COUCHDB_ADMIN_PASS={{ couchdb_admin_password }}"
+Environment="JWT_SECRET={{ jwt_hmac_key }}"
+Environment="SERVER_URL=https://nyancad.com"
 ExecStart={{ nyancad_app_dir }}/venv/bin/gunicorn \
     --workers 3 \
     --worker-class uvicorn.workers.UvicornWorker \
     "nyancad_server.server:create_wasm_app()"
 
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 
 [Install]

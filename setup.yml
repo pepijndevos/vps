@@ -27,6 +27,7 @@
     nyancad_app_dir: /opt/nyancad-server
     nyancad_user: nyancad
     nyancad_socket_path: /run/nyancad-server.sock
+    jwt_hmac_key: "{{ vault_jwt_hmac_key | default('supersecretkeythatshouldbereplaced') }}"
 
     # CouchDB configuration
     couchdb_admin_user: admin
@@ -38,14 +39,14 @@
     github_runner_version: "2.324.0"
     github_repo_url: "https://github.com/sanctuary-systems-com/llm-addons"
     github_runner_token: "{{ vault_github_runner_token }}"
-    github_runner_name: "{{ ansible_hostname }}-runner"
+    github_runner_name: "{{ ansible_facts['hostname'] }}-runner"
     
   tasks:
     - name: Update package cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
-      when: ansible_os_family == "Debian"
+      when: ansible_facts["os_family"] == "Debian"
 
     - name: Install required packages
       package:
@@ -131,7 +132,7 @@
 
     - name: Add Docker repository
       apt_repository:
-        repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
         state: present
 
     - name: Update package cache after adding Docker repo
@@ -169,7 +170,7 @@
 
     - name: Add CouchDB repository
       apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/couchdb-archive-keyring.asc] https://apache.jfrog.io/artifactory/couchdb-deb/ {{ ansible_distribution_release }} main"
+        repo: "deb [signed-by=/etc/apt/keyrings/couchdb-archive-keyring.asc] https://apache.jfrog.io/artifactory/couchdb-deb/ {{ ansible_facts['distribution_release'] }} main"
         state: present
 
     - name: Update package cache after adding CouchDB repo
@@ -229,7 +230,7 @@
 
     - name: Detect system architecture
       set_fact:
-        runner_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x64' }}"
+        runner_arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'x64' }}"
 
     - name: Create actions-runner directory
       file:
@@ -300,7 +301,7 @@
         state: directory
         owner: "{{ nyancad_user }}"
         group: "{{ nyancad_user }}"
-        mode: '0755'
+        mode: '0775'
 
     - name: Install python3-venv
       apt:
@@ -321,6 +322,7 @@
           - gunicorn
           - uvicorn[standard]
         virtualenv: "{{ nyancad_app_dir }}/venv"
+      become_user: "{{ nyancad_user }}"
 
     - name: Create systemd socket file for NyanCAD Server
       template:
@@ -347,7 +349,7 @@
         shell: /bin/bash
         home: /home/deploy
         create_home: yes
-        groups: "{{ nginx_user }}"
+        groups: "{{ nginx_user }},{{ nyancad_user }}"
         append: yes
 
     - name: Create .ssh directory for deploy user
@@ -363,6 +365,13 @@
         user: deploy
         key: "{{ deploy_ssh_public_key }}"
         state: present
+
+    - name: Allow deploy user to reload nyancad-server
+      lineinfile:
+        path: /etc/sudoers.d/deploy-user
+        line: 'deploy ALL=(root) NOPASSWD: /bin/systemctl reload nyancad-server'
+        create: yes
+        validate: 'visudo -cf %s'
 
     # Enable automatic security updates
     - name: Start and enable unattended-upgrades
