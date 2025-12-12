@@ -19,7 +19,7 @@ server {
     {% else %}
     root {{ item.document_root }};
     index index.html index.htm index.nginx-debian.html;
-    
+
     location / {
         {% if item.autoindex is defined and item.autoindex %}
         autoindex on;
@@ -28,10 +28,10 @@ server {
         {% endif %}
         try_files $uri $uri/ =404;
     }
-    {% endif %}
 
-    # Deny access to hidden files
+    # Deny access to hidden files (only for static file serving)
     location ~ /\. {
         deny all;
     }
+    {% endif %}
 }
